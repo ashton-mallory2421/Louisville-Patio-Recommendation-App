@@ -3,8 +3,10 @@ A Louisville Patio Recommendation App that uses Open Meteo API call to present w
 # Louisville Patio Recommendation App - PowerBI
 <img width="1458" height="806" alt="image" src="https://github.com/user-attachments/assets/e598e6b5-14de-4900-b120-52b796602b58" />
 This interactive Power BI dashboard helps Louisville diners quickly decide whether it’s a great day to enjoy a patio and which restaurants offer the best outdoor options. It combines real‑time weather data, geospatial mapping, and restaurant attributes to deliver a simple, data‑driven dining guide.
+
 # Purpose
 The goal of the dashboard is to blend weather intelligence with local dining data to help Louisville residents and visitors make smarter, more enjoyable decisions about where to eat—especially when the weather is perfect for a patio.
+
 # How it works
 The dashboard makes a live call to the Open‑Meteo API to retrieve current and forecasted weather conditions for Louisville, including:
 - Temperature highs and lows
