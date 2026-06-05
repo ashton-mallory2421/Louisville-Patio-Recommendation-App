@@ -3,10 +3,27 @@ A Louisville Patio Recommendation App that uses Open Meteo API call to present w
 # Louisville Patio Recommendation App - PowerBI
 <img width="1458" height="806" alt="image" src="https://github.com/user-attachments/assets/e598e6b5-14de-4900-b120-52b796602b58" />
 This interactive Power BI dashboard helps Louisville diners quickly decide whether it’s a great day to enjoy a patio and which restaurants offer the best outdoor options. It combines real‑time weather data, geospatial mapping, and restaurant attributes to deliver a simple, data‑driven dining guide.
-## How it works
+# How it works
 The dashboard makes a live call to the Open‑Meteo API to retrieve current and forecasted weather conditions for Louisville, including:
-Temperature highs and lows
-UV index
-Precipitation probability
-Sunrise and sunset times
+- Temperature highs and lows
+- UV index
+- Precipitation probability
+- Sunrise and sunset times
+- <img width="1433" height="802" alt="image" src="https://github.com/user-attachments/assets/9fb4cf5f-d0e2-43f2-a06c-8a7caa8d0b21" />
+
 Using this data, the model computes a Patio Comfort Index (PCI) — a 0–100 score that summarizes how enjoyable outdoor dining will be. A higher PCI means better patio weather.
+<img width="333" height="275" alt="image" src="https://github.com/user-attachments/assets/794fe1ec-d92f-4f9e-bc26-db2a992cd889" />
+
+# Interactive Restaurant Map
+A dynamic map plots restaurants across Louisville, categorized by patio type:
+- Open patios
+- Covered patios
+- Indoor only
+- <img width="582" height="260" alt="image" src="https://github.com/user-attachments/assets/996f188c-f6f0-4355-8e4a-641eadf68129" />
+
+Users can filter the map and recommendation table by:
+- Cuisine
+- Price level
+- Patio type
+- Neighborhood
+This makes it easy to explore options that match your preferences.
