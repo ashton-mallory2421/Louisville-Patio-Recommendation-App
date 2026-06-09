@@ -1,1 +1,6 @@
-
+supabase
+requests
+logging
+datetime
+parser
+openmeteo-requests
