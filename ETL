@@ -1,1 +1,232 @@
+"""
+Patio Comfort ETL — Kill & Fill Version
+Deletes all existing weather + patio score rows,
+then loads ONLY the most recent data.
+"""
+
+import requests
+import logging
+from logging.handlers import RotatingFileHandler
+from datetime import datetime
+from dateutil import parser
+from supabase import create_client, Client
+
+# ---------------------------------------------------
+# CONFIG
+# ---------------------------------------------------
+
+SUPABASE_URL = "https://geogvvutjddqghjjhjrd.supabase.co"
+SUPABASE_KEY = "sb_publishable_9OBPnVnaQJwubP2sPl45lw_mRcsQHmE"
+
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# ---------------------------------------------------
+# LOGGING
+# ---------------------------------------------------
+
+def setup_logging():
+    logger = logging.getLogger("patio_etl")
+    logger.setLevel(logging.INFO)
+
+    if not logger.handlers:
+        ch = logging.StreamHandler()
+        fh = RotatingFileHandler("patio_etl.log", maxBytes=1_000_000, backupCount=3)
+        fmt = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+        ch.setFormatter(fmt)
+        fh.setFormatter(fmt)
+        logger.addHandler(ch)
+        logger.addHandler(fh)
+
+    return logger
+
+logger = setup_logging()
+
+# ---------------------------------------------------
+# 1. EXTRACT WEATHER
+# ---------------------------------------------------
+
+def fetch_current_weather():
+    logger.info("Extracting weather from Open-Meteo...")
+
+    url = "https://api.open-meteo.com/v1/forecast"
+    params = {
+        "latitude": 38.2527,
+        "longitude": -85.7585,
+        "daily": [
+            "weather_code",
+            "temperature_2m_max",
+            "temperature_2m_min",
+            "wind_speed_10m_max",
+            "precipitation_probability_max",
+            "uv_index_max",
+            "daylight_duration",
+            "sunrise",
+            "sunset"
+        ],
+        "temperature_unit": "fahrenheit",
+        "windspeed_unit": "mph",
+        "timezone": "America/New_York"
+    }
+
+    r = requests.get(url, params=params, timeout=10)
+    r.raise_for_status()
+    data = r.json()
+
+    if "daily" not in data:
+        raise ValueError("Missing 'daily' in API response")
+
+    d = data["daily"]
+
+    sunrise = parser.isoparse(d["sunrise"][0]).strftime("%H:%M")
+    sunset = parser.isoparse(d["sunset"][0]).strftime("%H:%M")
+
+    def safe(v, default=0.0):
+        return v[0] if v and v[0] is not None else default
+
+    weather = {
+        "WEATHER_DATE": datetime.now().date().isoformat(),
+        "MAX_TEMP": safe(d["temperature_2m_max"]),
+        "MIN_TEMP": safe(d["temperature_2m_min"]),
+        "WEATHER_CODE": safe(d["weather_code"], default=0),
+        "MAX_WIND_SPEED": safe(d["wind_speed_10m_max"]),
+        "MAX_PRECIP_PROB": safe(d["precipitation_probability_max"]),
+        "UV_INDEX": safe(d["uv_index_max"]),
+        "DAYLIGHT_DURATION": safe(d["daylight_duration"]),
+        "SUNRISE": sunrise,
+        "SUNSET": sunset
+    }
+
+    logger.info("Weather extraction complete.")
+    return weather
+
+# ---------------------------------------------------
+# 2. VALIDATION
+# ---------------------------------------------------
+
+def validate_weather(weather):
+    logger.info("Validating weather data...")
+
+    if weather["MAX_TEMP"] < -40 or weather["MAX_TEMP"] > 130:
+        raise ValueError("MAX_TEMP out of range")
+
+    if not (0 <= weather["MAX_PRECIP_PROB"] <= 100):
+        raise ValueError("MAX_PRECIP_PROB out of range")
+
+    if not (0 <= weather["UV_INDEX"] <= 15):
+        raise ValueError("UV_INDEX out of range")
+
+    logger.info("Weather validation passed.")
+
+# ---------------------------------------------------
+# 3. KILL — DELETE OLD DATA
+# ---------------------------------------------------
+
+def clear_existing_data():
+    """
+    Kill & Fill strategy:
+    Completely wipe DAILY_WEATHER and PATIO_SCORES
+    before inserting new data.
+    """
+    logger.info("Clearing existing data (kill phase)...")
+
+    supabase.table("PATIO_SCORES").delete().neq("RES_ID", -1).execute()
+    supabase.table("DAILY_WEATHER").delete().neq("WEATHER_ID", -1).execute()
+
+    logger.info("All existing data cleared.")
+
+# ---------------------------------------------------
+# 4. FILL — INSERT NEW WEATHER
+# ---------------------------------------------------
+
+def insert_weather(weather):
+    logger.info("Inserting fresh weather row...")
+
+    response = supabase.table("DAILY_WEATHER").insert(weather).execute()
+
+    if not response.data:
+        raise RuntimeError("Weather insert failed.")
+
+    weather_id = response.data[0]["WEATHER_ID"]
+    logger.info(f"Inserted WEATHER_ID={weather_id}")
+    return weather_id
+
+# ---------------------------------------------------
+# 5. TRANSFORM — PCI
+# ---------------------------------------------------
+
+def compute_pci(temp, wind, precip, uv):
+    pci = 100
+    pci -= abs(75 - temp) * 1.0
+    pci -= max(0, wind - 8) * 1.0
+    pci -= precip * 0.5
+    pci -= max(0, uv - 6) * 2.0
+    return max(0, min(100, pci))
+
+# ---------------------------------------------------
+# 6. FILL — INSERT PATIO SCORES
+# ---------------------------------------------------
+
+def insert_patio_scores(weather_id, weather):
+    logger.info("Inserting patio scores...")
+
+    restaurants = supabase.table("RESTAURANT").select("*").execute().data
+
+    rows = []
+    for r in restaurants:
+        pci = compute_pci(
+            weather["MAX_TEMP"],
+            weather["MAX_WIND_SPEED"],
+            weather["MAX_PRECIP_PROB"],
+            weather["UV_INDEX"]
+        )
+
+        reason = (
+            "Great patio weather" if pci >= 70 else
+            "Okay for covered patios" if pci >= 40 else
+            "Better for indoor dining"
+        )
+
+        rows.append({
+            "RES_ID": r["RES_ID"],
+            "WEATHER_ID": weather_id,
+            "COMFORT_SCORE": pci,
+            "REASON": reason
+        })
+
+    response = supabase.table("PATIO_SCORES").insert(rows).execute()
+
+    if not response.data:
+        raise RuntimeError("Patio score insert failed.")
+
+    logger.info("Patio scores inserted successfully.")
+
+# ---------------------------------------------------
+# 7. MAIN ORCHESTRATION
+# ---------------------------------------------------
+
+def run_load():
+    logger.info("Starting Kill & Fill ETL pipeline...")
+
+    try:
+        # Extract
+        weather = fetch_current_weather()
+
+        # Validate
+        validate_weather(weather)
+
+        # Kill old data
+        clear_existing_data()
+
+        # Insert new weather
+        weather_id = insert_weather(weather)
+
+        # Insert new patio scores
+        insert_patio_scores(weather_id, weather)
+
+        logger.info("Kill & Fill ETL completed successfully.")
+
+    except Exception as e:
+        logger.exception(f"ETL failed: {e}")
+
+run_load()
 
