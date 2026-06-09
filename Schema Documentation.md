@@ -53,3 +53,7 @@ Foreign Keys: RES_ID, WEATHER_ID
 | REASON | TEXT |  | Explanation of score |
 | TIMESTAMP | TIME |  | Timestamp |
 
+## ERD
+<img width="936" height="1157" alt="image" src="https://github.com/user-attachments/assets/2af7d220-efd3-4f9c-8cc2-01a98b8bd9f8" />
+
+
