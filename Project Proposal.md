@@ -32,12 +32,12 @@ ETL Workflow
   -	Feed data into dashboard
 ## PCI Calculation:
 The PCI calculation is calculated using the formula below:
-    -  pci = 100
-    -  pci -= abs(75 - temp) * 1.0
-    -  pci -= max(0, wind - 8) * 1.0
-    -  pci -= precip * 0.5
-    -  pci -= max(0, uv - 6) * 2.0
-    -  return max(0, min(100, pci))
+- pci = 100
+- pci -= abs(75 - temp) * 1.0
+- pci -= max(0, wind - 8) * 1.0
+- pci -= precip * 0.5
+- pci -= max(0, uv - 6) * 2.0
+- return max(0, min(100, pci))
 
 ## Visualization Strategy:
 -	Current weather summary card
@@ -48,11 +48,11 @@ The PCI calculation is calculated using the formula below:
 ## Diagram:
  <img width="975" height="482" alt="image" src="https://github.com/user-attachments/assets/d7e3486a-87da-4b7f-b4f9-cfc8bba245e6" />
 ## Timeline: 
--  Week 1	Initial research, API selection, proposal draft
--  Week 2	Build API extraction code and transformation pipeline
--  Week 3	Complete storage layer and data cleaning
--  Week 4	Build Dashboard and Visualization
--  Week 5	Final testing, presentation and submission
+- Week 1	Initial research, API selection, proposal draft
+- Week 2	Build API extraction code and transformation pipeline
+- Week 3	Complete storage layer and data cleaning
+- Week 4	Build Dashboard and Visualization
+- Week 5	Final testing, presentation and submission
 
 ## Expected Outcomes and Deliverables:
 •	Interactive dashboard displaying weather data and restaurant/patio recommendations
