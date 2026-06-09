@@ -1,1 +1,165 @@
+##V2
+import requests
+from datetime import datetime
+from dateutil import parser
+from supabase import create_client, Client
 
+SUPABASE_URL = "https://geogvvutjddqghjjhjrd.supabase.co"
+SUPABASE_KEY = "sb_publishable_9OBPnVnaQJwubP2sPl45lw_mRcsQHmE"
+
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# ---------------------------------------------------
+# 1. Fetch Weather from Open-Meteo
+# ---------------------------------------------------
+def fetch_current_weather():
+    url = "https://api.open-meteo.com/v1/forecast"
+    params = {
+        "latitude": 38.2527,
+        "longitude": -85.7585,
+        "daily": [
+            "weather_code",
+            "temperature_2m_max",
+            "temperature_2m_min",
+            "wind_speed_10m_max",
+            "precipitation_probability_max",
+            "uv_index_max",
+            "daylight_duration",
+            "sunrise",
+            "sunset"
+        ],
+        "temperature_unit": "fahrenheit",
+        "windspeed_unit": "mph",
+        "timezone": "America/New_York"
+    }
+
+    r = requests.get(url, params=params)
+    data = r.json()
+
+    if "daily" not in data:
+        raise ValueError("Missing 'daily' in API response")
+
+    d = data["daily"]
+
+    # Parse sunrise/sunset safely, handling potential None for consistency
+    sunrise_val = d["sunrise"][0]
+    sunset_val = d["sunset"][0]
+    sunrise = parser.isoparse(sunrise_val).strftime("%H:%M") if sunrise_val else "00:00"
+    sunset = parser.isoparse(sunset_val).strftime("%H:%M") if sunset_val else "00:00"
+
+    # Helper to get value or default to 0.0 if None
+    def get_numeric_value(key_list, default=0.0):
+        value = key_list[0] if key_list and len(key_list) > 0 else None
+        return value if value is not None else default
+
+    return {
+        "WEATHER_DATE": datetime.now().date().isoformat(),
+        "MAX_TEMP": get_numeric_value(d["temperature_2m_max"]),
+        "MIN_TEMP": get_numeric_value(d["temperature_2m_min"]),
+        "WEATHER_CODE": get_numeric_value(d["weather_code"], default=0), # Default to 0 for int
+        "MAX_WIND_SPEED": get_numeric_value(d["wind_speed_10m_max"]),
+        "MAX_PRECIP_PROB": get_numeric_value(d["precipitation_probability_max"]),
+        "UV_INDEX": get_numeric_value(d["uv_index_max"]),
+        "DAYLIGHT_DURATION": get_numeric_value(d["daylight_duration"]),
+        "SUNRISE": sunrise,
+        "SUNSET": sunset
+    }
+
+# ---------------------------------------------------
+# 2. Upsert Weather Row (Idempotent)
+# ---------------------------------------------------
+def upsert_weather(weather):
+    existing = supabase.table("DAILY_WEATHER") \
+        .select("WEATHER_ID") \
+        .eq("WEATHER_DATE", weather["WEATHER_DATE"]) \
+        .execute()
+
+    if existing.data:
+        print("Weather already exists for today.")
+        return existing.data[0]["WEATHER_ID"]
+
+    response = supabase.table("DAILY_WEATHER").insert(weather).execute()
+
+    # The 'APIResponse' object does not have an 'error' attribute directly.
+    # The Supabase client usually raises an exception on API errors.
+    # If the insert fails silently without an exception, `response.data` might be empty.
+    # Accessing response.data[0] will raise an IndexError if data is empty.
+    # This is a more Pythonic way to handle it.
+    if not response.data:
+        raise RuntimeError("Insert failed: No data returned from Supabase.")
+
+    return response.data[0]["WEATHER_ID"]
+
+# ---------------------------------------------------
+# 3. PCI Calculation
+# ---------------------------------------------------
+def compute_pci(temp, wind, precip, uv):
+    pci = 100
+
+    # Temperature comfort (ideal 68–78)
+    pci -= abs(75 - temp) * 1.0
+
+    # Wind penalty (gentle breeze is fine)
+    pci -= max(0, wind - 8) * 1.0
+
+    # Precipitation probability (scaled down)
+    pci -= precip * 0.5
+
+    # UV penalty (only high UV matters)
+    pci -= max(0, uv - 6) * 2.0
+
+    return max(0, min(100, pci))
+
+# ---------------------------------------------------
+# 4. Insert Patio Scores
+# ---------------------------------------------------
+def insert_patio_scores(weather_id, weather):
+    restaurants = supabase.table("RESTAURANT").select("*").execute().data
+
+    if not restaurants:
+        print("No restaurants found.")
+        return
+
+    rows = []
+    for r in restaurants:
+        pci = compute_pci(
+            weather["MAX_TEMP"],
+            weather["MAX_WIND_SPEED"],
+            weather["MAX_PRECIP_PROB"],
+            weather["UV_INDEX"]
+        )
+
+        reason = (
+            "Great patio weather" if pci >= 70 else
+            "Okay for covered patios" if pci >= 40 else
+            "Better for indoor dining"
+        )
+
+        rows.append({
+            "RES_ID": r["RES_ID"],
+            "WEATHER_ID": weather_id,
+            "COMFORT_SCORE": pci,
+            "REASON": reason
+        })
+
+    response = supabase.table("PATIO_SCORES").insert(rows).execute()
+
+    if not response.data:
+        raise RuntimeError(f"Patio score insert failed: No data returned from Supabase.")
+
+# ---------------------------------------------------
+# 5. Main Load Function
+# ---------------------------------------------------
+def run_load():
+    print("Fetching weather...")
+    weather = fetch_current_weather()
+
+    print("Upserting weather row...")
+    weather_id = upsert_weather(weather)
+
+    print("Inserting patio scores...")
+    insert_patio_scores(weather_id, weather)
+
+    print("Load complete.")
+
+run_load()
