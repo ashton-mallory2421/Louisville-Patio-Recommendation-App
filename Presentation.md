@@ -3,6 +3,7 @@ Louisville’s restaurant industry thrives on engagement from locals and tourist
 ## Data Sources
 Weather Data
 - Open Meteo
+
 Restaurant Data
 - compiled restaurant data from local restaurants, including location, cuisine type, price level etc
 ## Pipeline Architecture Overview
