@@ -21,10 +21,6 @@ Load
 
 <img width="598" height="337" alt="image" src="https://github.com/user-attachments/assets/07cb1315-863a-42ff-8d3c-7945aa281896" />
 
-## Validation Checks
-<img width="705" height="478" alt="image" src="https://github.com/user-attachments/assets/4c1ae886-ecb8-464a-b2e9-599a9f48330c" />
-## Computing PCI
-<img width="608" height="327" alt="image" src="https://github.com/user-attachments/assets/da40f39f-4f28-40ab-9405-19519bb33250" />
 ## Dashboard Demo
 <img width="1305" height="730" alt="image" src="https://github.com/user-attachments/assets/9e27e46e-b2c5-4167-a974-a92a5aeb80b5" />
 <img width="1298" height="737" alt="image" src="https://github.com/user-attachments/assets/c3334607-253f-4bdf-9d79-53b9e98b294f" />
